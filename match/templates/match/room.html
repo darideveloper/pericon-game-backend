@@ -9,9 +9,18 @@
 
 <body>
 
-    <div class="oponent-cards"></div>
+    <h1>Pericon</h1>
+    <div class="points">
+        <div class="my-points">My points: <span>0</span></div>
+        <div class="opponent-points">Opponent points: <span>0</span></div>
+    </div>
+    <div class="opponent-cards"></div>
+    <div class="openent-card-current"></div>
     <div class="middle-card"></div>
+    <div class="my-card-current"></div>
     <div class="my-cards"></div>
+
+    <button class="next" disabled>More cards</button>
 
     <script>
 
@@ -58,18 +67,22 @@
                 })
 
                 // render opent cards
-                const oponentCards = document.querySelector('.oponent-cards')
-                oponentCards.innerHTML = ''
+                const opponentCards = document.querySelector('.opponent-cards')
+                opponentCards.innerHTML = ''
                 roundCards.forEach(card => {
                     const cardButton = document.createElement('button')
                     cardButton.textContent = "???"
-                    oponentCards.appendChild(cardButton)
+                    opponentCards.appendChild(cardButton)
                 })
             }
 
             if (data.type === 'middle card') {
-                const card = data.value
+
+                // delete old middle card
                 const middleCard = document.querySelector('.middle-card')
+                middleCard.innerHTML = ''
+
+                const card = data.value
                 
                 // render middle card as button with text
                 const cardButton = document.createElement('button')
@@ -83,11 +96,88 @@
                 alert(data.value)
             }
 
+            // render round openent card
+            if (data.type === 'round played cards') {
+                // loop cards
+                for (card of data.value) {
+                    const player = card.player
+                    const cardValue = card.card
+
+                    if (player === username) {
+                        const myCardCurrent = document.querySelector('.my-card-current')
+                        myCardCurrent.innerHTML = ''
+                        const cardButton = document.createElement('button')
+                        cardButton.textContent = cardValue
+                        myCardCurrent.appendChild(cardButton)
+
+                        // remove cards from my cards
+                        const myCardsWrapper = document.querySelector('.my-cards')
+                        const myCards = myCardsWrapper.querySelectorAll('button')
+                        for (myCard of myCards) {
+                            if (myCard.textContent === cardValue) {
+                                myCardsWrapper.removeChild(myCard)
+                            }
+                        }
+
+                    } else {
+                        const opponentCardCurrent = document.querySelector('.openent-card-current')
+                        opponentCardCurrent.innerHTML = ''
+                        const cardButton = document.createElement('button')
+                        cardButton.textContent = cardValue
+                        opponentCardCurrent.appendChild(cardButton)
+
+                        // remove one card from opponent cards
+                        const opponentCards = document.querySelector('.opponent-cards')
+                        const opponentCardsButtons = opponentCards.querySelectorAll('button')
+                        const firstButton = opponentCardsButtons[0]
+                        opponentCards.removeChild(firstButton)
+                    }
+                }
+            }
+
+            // Show winner
+            if (data.type === "round winner") {
+                const winner = data.value
+
+                if (winner === 'draw') {
+                    alert('Draw')
+                } else {
+                    if (winner === username) {
+                        alert('You win this round')
+                    } else {
+                        alert('You lose this round')
+                    }
+                }
+                
+                // count available cards
+                const myCards = document.querySelector('.my-cards').querySelectorAll('button')
+                if (myCards.length === 0) {
+                    const nextButton = document.querySelector('.next')
+                    nextButton.disabled = false
+                }
+            }
+
+            // update points
+            if (data.type === 'points') {
+                const points = data.value
+                const myPoints = document.querySelector('.my-points span')
+                const opponentPoints = document.querySelector('.opponent-points span')
+
+                data.value.forEach(point => {
+                    if (point.player === username) {
+                        myPoints.textContent = point.points
+                    } else {
+                        opponentPoints.textContent = point.points
+                    }
+                })
+            }
+
         }
 
         matchSocket.onclose = function (e) {
             console.error('Chat socket closed unexpectedly')
         }
+
 
 
     </script>
