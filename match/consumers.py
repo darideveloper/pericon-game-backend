@@ -23,6 +23,9 @@ class MatchMatchmakerConsumer(AsyncWebsocketConsumer):
             # Get the first two users from the queue
             user1 = waiting_queue.popleft()
             user2 = waiting_queue.popleft()
+            
+            # Get active rooms from django cache
+            active_rooms = cache.get("active_rooms", set())
 
             # Create a unique room name for the match
             characters = string.ascii_lowercase
@@ -81,6 +84,12 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 "players": {},
                 "middle_card": None
             })
+            
+        # Disconnect if the room is full
+        room_data = cache.get(self.room_group_name)
+        if len(room_data["players"]) > 2:
+            await self.disconnect(1000)
+            return
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -90,6 +99,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
     async def receive(self, text_data):
         
         json_data = json.loads(text_data)
+        print(json_data)
         message_type = json_data["type"]
         message_value = json_data["value"]
         
@@ -99,8 +109,19 @@ class MatchConsumer(AsyncWebsocketConsumer):
             
             # Update player info in cache
             room_data = cache.get(self.room_group_name)
-            room_data["players"][self.username] = {"wins": 0}
-            cache.set(self.room_group_name, room_data)
+            if (len(room_data["players"]) < 2):
+                room_data["players"][self.username] = {"wins": 0}
+                cache.set(self.room_group_name, room_data)
+            else:
+                
+                # Send full room message
+                await self.send(text_data=json.dumps({
+                    "type": "error",
+                    "value": "The room is full"
+                }))
+                
+                await self.disconnect(1000)
+                return
                        
             # Get 3 random cards
             random_cards = random.sample(self.cards, 3)
@@ -120,6 +141,8 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         "value": random_card
                     }
                 )
+                
+            print(room_data["players"])
         
     # Receive cards from room group
     async def cards_send_middile_card(self, event):

@@ -24,9 +24,8 @@
 
         const matchSocket = new WebSocket(wsPath)
 
-        let username = "daridev"
-
-        // Debug: add random number to username
+        // random username
+        let username = "user"
         username += + Math.floor(Math.random() * 1000)
 
         // send username to the server after connection is open
@@ -76,7 +75,12 @@
                 const cardButton = document.createElement('button')
                 cardButton.textContent = card
                 middleCard.appendChild(cardButton)
+            }
 
+            
+            // render errors
+            if (data.type === 'error') {
+                alert(data.value)
             }
 
         }
