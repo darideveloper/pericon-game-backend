@@ -45,6 +45,16 @@
             }))
         }
 
+        // request more cards with button
+        const nextButton = document.querySelector('.next')
+        nextButton.addEventListener('click', function () {
+            matchSocket.send(JSON.stringify({
+                'type': 'more cards',
+                'value': ''
+            }))
+            nextButton.disabled = true
+        })
+
         matchSocket.onmessage = function (e) {
             const data = JSON.parse(e.data)
             console.log(data)

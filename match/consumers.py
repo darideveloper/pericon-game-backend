@@ -4,7 +4,6 @@ import string
 from collections import deque
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.core.cache import cache
-from time import sleep
 
 # A global set to track active room names
 waiting_queue = deque()
@@ -190,7 +189,6 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
             await self.__send_round_new_cards__()
             await self.__start_round__()
-            print(room_data["players"])
 
         if message_type == "use card":
             # Update player info in cache
@@ -199,8 +197,6 @@ class MatchConsumer(AsyncWebsocketConsumer):
             room_data["players"][self.username]["current_card"] = message_value
             cache.set(self.room_group_name, room_data)
             
-            print(room_data)
-
             # Check if both players have used a card
             if all(player["current_card"] for player in room_data["players"].values()):
 
@@ -252,6 +248,18 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 )
                 
                 # start new round
+                await self.__start_round__()
+                
+        if message_type == "more cards":
+                        
+            # Update user status to ready
+            room_data = cache.get(self.room_group_name)
+            room_data["players"][self.username]["ready"] = True
+            cache.set(self.room_group_name, room_data)
+            await self.__send_round_new_cards__()
+            
+            # Check if both players are ready
+            if all(player["ready"] for player in room_data["players"].values()):
                 await self.__start_round__()
             
     async def send_middile_card(self, event):
