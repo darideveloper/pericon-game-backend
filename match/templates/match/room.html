@@ -1,50 +1,92 @@
 <!-- chat/templates/chat/room.html -->
 <!DOCTYPE html>
 <html>
+
 <head>
-    <meta charset="utf-8"/>
+    <meta charset="utf-8" />
     <title>Chat Room</title>
 </head>
+
 <body>
-    <textarea id="chat-log" cols="100" rows="20"></textarea><br>
-    <input id="chat-message-input" type="text" size="100"><br>
-    <input id="chat-message-submit" type="button" value="Send">
-    {{ room_name|json_script:"room-name" }}
+
+    <div class="oponent-cards"></div>
+    <div class="middle-card"></div>
+    <div class="my-cards"></div>
+
     <script>
-        const roomName = JSON.parse(document.getElementById('room-name').textContent);
 
-        const chatSocket = new WebSocket(
-            'ws://'
-            + window.location.host
-            + '/ws/match/'
-            + roomName
-            + '/'
-        );
+        // get room name form url http://127.0.0.1:8000/pericon/match/zvuinx/
+        const room_name = window.location.pathname.split('/').slice(-2)[0]
 
-        chatSocket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
-            document.querySelector('#chat-log').value += (data.message + '\n');
-        };
+        // TODO: get ws api from settings
+        const wsHost = 'ws://' + window.location.host
+        const wsPath = wsHost + `/ws/pericon/match/${room_name}/`
 
-        chatSocket.onclose = function(e) {
-            console.error('Chat socket closed unexpectedly');
-        };
+        const matchSocket = new WebSocket(wsPath)
 
-        document.querySelector('#chat-message-input').focus();
-        document.querySelector('#chat-message-input').onkeyup = function(e) {
-            if (e.key === 'Enter') {  // enter, return
-                document.querySelector('#chat-message-submit').click();
+        let username = "daridev"
+
+        // Debug: add random number to username
+        username += + Math.floor(Math.random() * 1000)
+
+        // send username to the server after connection is open
+        matchSocket.onopen = function (e) {
+            matchSocket.send(JSON.stringify({
+                'type': 'username',
+                'value': username
+            }))
+        }
+
+        matchSocket.onmessage = function (e) {
+            const data = JSON.parse(e.data)
+            console.log(data)
+
+            if (data.type === 'round cards') {
+
+                // render my card (as buttons) card whet get them
+                const roundCards = data.value
+                roundCards.forEach(card => {
+                    const cardButton = document.createElement('button')
+                    cardButton.textContent = card
+                    cardButton.onclick = function () {
+                        matchSocket.send(JSON.stringify({
+                            'type': 'use card',
+                            'value': card
+                        }))
+                    }
+                    const myCardsWrapper = document.querySelector('.my-cards')
+                    myCardsWrapper.appendChild(cardButton)
+                })
+
+                // render opent cards
+                const oponentCards = document.querySelector('.oponent-cards')
+                oponentCards.innerHTML = ''
+                roundCards.forEach(card => {
+                    const cardButton = document.createElement('button')
+                    cardButton.textContent = "???"
+                    oponentCards.appendChild(cardButton)
+                })
             }
-        };
 
-        document.querySelector('#chat-message-submit').onclick = function(e) {
-            const messageInputDom = document.querySelector('#chat-message-input');
-            const message = messageInputDom.value;
-            chatSocket.send(JSON.stringify({
-                'message': message
-            }));
-            messageInputDom.value = '';
-        };
+            if (data.type === 'middle card') {
+                const card = data.value
+                const middleCard = document.querySelector('.middle-card')
+                
+                // render middle card as button with text
+                const cardButton = document.createElement('button')
+                cardButton.textContent = card
+                middleCard.appendChild(cardButton)
+
+            }
+
+        }
+
+        matchSocket.onclose = function (e) {
+            console.error('Chat socket closed unexpectedly')
+        }
+
+
     </script>
 </body>
+
 </html>

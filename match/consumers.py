@@ -1,11 +1,11 @@
+import json
 import random
 import string
 from collections import deque
 from channels.generic.websocket import AsyncWebsocketConsumer
-import json
+from django.core.cache import cache
 
 # A global set to track active room names
-active_rooms = set()
 waiting_queue = deque()
 
 
@@ -52,23 +52,35 @@ class MatchMatchmakerConsumer(AsyncWebsocketConsumer):
 
         # Send message to WebSocket
         await self.send(text_data=json.dumps({"room_name": room_name}))
-    
-    # Delete active room when match ends
-    async def match_end(self, event):
-        room_name = event["room_name"]
-        active_rooms.remove(room_name)
-
+        
 
 class MatchConsumer(AsyncWebsocketConsumer):
-    
+
     async def connect(self):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
-        self.room_group_name = f"chat_{self.room_name}"
+        self.room_group_name = f"room_{self.room_name}"
 
         # Join room group
         await self.channel_layer.group_add(self.room_group_name, self.channel_name)
-
         await self.accept()
+        
+        # Initialize username
+        self.username = None
+        
+        # Setup cards
+        cards_types = ["clubs", "cups", "gold", "swords"]
+        cards_values = ["1", "2", "3", "4", "5", "6", "7", "10", "11", "12"]
+        self.cards = []
+        for card_type in cards_types:
+            for card_value in cards_values:
+                self.cards.append(f"{card_value} {card_type}")
+                
+        # Initialize room data
+        if not cache.get(self.room_group_name):
+            cache.set(self.room_group_name, {
+                "players": {},
+                "middle_card": None
+            })
 
     async def disconnect(self, close_code):
         # Leave room group
@@ -76,17 +88,45 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
     # Receive message from WebSocket
     async def receive(self, text_data):
-        text_data_json = json.loads(text_data)
-        message = text_data_json["message"]
-
-        # Send message to room group
-        await self.channel_layer.group_send(
-            self.room_group_name, {"type": "chat.message", "message": message}
-        )
-
-    # Receive message from room group
-    async def chat_message(self, event):
-        message = event["message"]
-
-        # Send message to WebSocket
-        await self.send(text_data=json.dumps({"message": message}))
+        
+        json_data = json.loads(text_data)
+        message_type = json_data["type"]
+        message_value = json_data["value"]
+        
+        # Get username and send cards
+        if message_type == "username":
+            self.username = message_value
+            
+            # Update player info in cache
+            room_data = cache.get(self.room_group_name)
+            room_data["players"][self.username] = {"wins": 0}
+            cache.set(self.room_group_name, room_data)
+                       
+            # Get 3 random cards
+            random_cards = random.sample(self.cards, 3)
+            
+            # Send cards only to current user
+            await self.send(text_data=json.dumps({
+                "type": "round cards",
+                "value": random_cards
+            }))
+            
+            # Set a random card as the table if both players are ready
+            if len(room_data["players"]) == 2:
+                random_card = random.choice(self.cards)
+                await self.channel_layer.group_send(
+                    self.room_group_name, {
+                        "type": "cards.send_middile_card",
+                        "value": random_card
+                    }
+                )
+        
+    # Receive cards from room group
+    async def cards_send_middile_card(self, event):
+        card = event["value"]
+        
+        # Send card to WebSocket
+        await self.send(text_data=json.dumps({
+            "type": "middle card",
+            "value": card
+        }))

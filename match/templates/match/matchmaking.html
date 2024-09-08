@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,46 +15,49 @@
             margin: 0;
             background-color: #f0f0f0;
         }
+
         #status {
             font-size: 1.5em;
             margin-bottom: 20px;
         }
     </style>
 </head>
+
 <body>
     <div id="status">Connecting...</div>
     <script>
         // TODO: get ws api from settings
         const wsHost = 'ws://' + window.location.host
 
-        const wsPath = wsHost + '/ws/pericon/matchmaker/';
-        const statusElement = document.getElementById('status');
-        const socket = new WebSocket(wsPath);
+        const wsPath = wsHost + '/ws/pericon/matchmaker/'
+        const statusElement = document.getElementById('status')
+        const socket = new WebSocket(wsPath)
 
-        socket.onopen = function(e) {
+        socket.onopen = function (e) {
             // Show message when connection is open
-            statusElement.textContent = 'Connected. Waiting for a match...';
-        };
+            statusElement.textContent = 'Connected. Waiting for a match...'
+        }
 
-        socket.onmessage = function(e) {
-            const data = JSON.parse(e.data);
+        socket.onmessage = function (e) {
+            const data = JSON.parse(e.data)
             if (data.room_name) {
-                statusElement.textContent = `Match started! Room: ${data.room_name}`;
+                statusElement.textContent = `Match started! Room: ${data.room_name}`
                 setTimeout(() => {
-                    window.location.href = `/match/${data.room_name}/`;
-                }, 2000);
+                    window.location.href = `/pericon/match/${data.room_name}/`
+                }, 2000)
             }
-        };
+        }
 
-        socket.onclose = function(e) {
+        socket.onclose = function (e) {
             // Show message when connection is closed
-            statusElement.textContent = 'Disconnected. Trying to reconnect...';
-        };
+            statusElement.textContent = 'Disconnected. Trying to reconnect...'
+        }
 
-        socket.onerror = function(e) {
+        socket.onerror = function (e) {
             // Show error when connection is closed
-            statusElement.textContent = 'Error. Please refresh the page.';
+            statusElement.textContent = 'Error. Please refresh the page.'
         };
     </script>
 </body>
+
 </html>
