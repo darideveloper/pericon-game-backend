@@ -1,10 +1,13 @@
 import json
 import random
 import string
+
 from collections import deque
-from channels.generic.websocket import AsyncWebsocketConsumer
+from time import sleep
+
 from django.core.cache import cache
 from django.conf import settings
+from channels.generic.websocket import AsyncWebsocketConsumer
 
 # A global set to track active room names
 waiting_queue = deque()
@@ -69,6 +72,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
         player_2_username = round_cards[1]["player"]
         player_1_card = round_cards[0]["card"]
         player_2_card = round_cards[1]["card"]
+                
         player_1_card_num = int(player_1_card.split(" ")[0])
         player_2_card_num = int(player_2_card.split(" ")[0])
         # middle_card_num = int(middle_card.split(" ")[0])
@@ -124,6 +128,24 @@ class MatchConsumer(AsyncWebsocketConsumer):
             # Save middle card in cache
             room_data["middle_card"] = random_card
             cache.set(self.room_group_name, room_data)
+            
+    async def __send_middile_card__(self, create_new=False):
+        """ Submit a new message with the current middle card
+        (optional: create a new middle card) """
+        
+        if create_new:
+            await self.__create_middle_card__()
+        
+        room_data = cache.get(self.room_group_name)
+        middle_card = room_data["middle_card"]
+        
+        # Send middle card to both players
+        await self.channel_layer.group_send(
+            self.room_group_name, {
+                "type": "send.middile_card",
+                "value": middle_card
+            }
+        )
 
     async def connect(self):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
@@ -188,7 +210,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
                     
                     cache.set(self.room_group_name, room_data)
                     
-                    # Send middle card
+                    # new middle card
                     await self.__create_middle_card__()
                     
                 else:
@@ -209,12 +231,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
             await self.__send_round_new_cards__()
             
             # Send current middle card
-            await self.channel_layer.group_send(
-                self.room_group_name, {
-                    "type": "send.middile_card",
-                    "value": room_data["middle_card"]
-                }
-            )
+            await self.__send_middile_card__()
             
             # Send usernames
             usernames = list(room_data["players"].keys())
@@ -229,6 +246,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
             # Update player info in cache
             room_data = cache.get(self.room_group_name)
             middle_card = room_data["middle_card"]
+            print(room_data)
             room_data["players"][self.username]["current_card"] = message_value
             cache.set(self.room_group_name, room_data)
             
@@ -252,7 +270,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
-                # Calculate winner
+                # Calculate winner only if both players have played a card
+                if not round_cards[0]["card"] or not round_cards[1]["card"]:
+                    return
+                    
                 round_winner = self.__get_round_winner__(round_cards, middle_card)
                 
                 # Submit round winner
@@ -295,18 +316,25 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         # Disconnect players
                         await self.disconnect(1000)
                         return
+        
+        if message_type == "next round":
+            
+            # Update user status to ready
+            room_data = cache.get(self.room_group_name)
+            room_data["players"][self.username]["ready"] = True
+            cache.set(self.room_group_name, room_data)
+            
+            # update middle card (validate if both players are ready 3 times)
+            for _ in range(3):
+                room_data = cache.get(self.room_group_name)
                 
-                # start new round
-                await self.__create_middle_card__()
-                
-                # Send current middle card
-                await self.channel_layer.group_send(
-                    self.room_group_name, {
-                        "type": "send.middile_card",
-                        "value": room_data["middle_card"]
-                    }
-                )
-                
+                # Check if both players are ready
+                if all(player["ready"] for player in room_data["players"].values()):
+                    await self.__send_middile_card__(create_new=True)
+                    break
+                    
+                sleep(0.5)
+        
         if message_type == "more cards":
                         
             # Update user status to ready
