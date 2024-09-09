@@ -85,9 +85,18 @@ class MatchConsumer(AsyncWebsocketConsumer):
     
     async def __send_round_new_cards__(self):
         """ Send random cards and middile card to each user and start round """
+        
+        # Validate if the user already have cards
+        room_data = cache.get(self.room_group_name)
+        random_cards = room_data["players"][self.username]["cards"]
+        if not random_cards:
                 
-        # Get 3 random cards
-        random_cards = random.sample(self.cards, 3)
+            # Get 3 random cards
+            random_cards = random.sample(self.cards, 3)
+        
+            # Save card in cache
+            room_data["players"][self.username]["cards"] = random_cards
+            cache.set(self.room_group_name, room_data)
 
         # Send cards only to current user
         await self.send(text_data=json.dumps({
@@ -95,10 +104,11 @@ class MatchConsumer(AsyncWebsocketConsumer):
             "value": random_cards
         }))
         
-    async def __start_round__(self):
+    async def __create_middle_card__(self):
+        """ Create middile card and save in cache """
         
         room_data = cache.get(self.room_group_name)
-
+        
         # Set a random card as the table if both players are ready
         if len(room_data["players"]) == 2:
             
@@ -111,13 +121,6 @@ class MatchConsumer(AsyncWebsocketConsumer):
             # Get a random cards
             random_card = random.choice(self.cards)
             
-            await self.channel_layer.group_send(
-                self.room_group_name, {
-                    "type": "send.middile_card",
-                    "value": random_card
-                }
-            )
-
             # Save middle card in cache
             room_data["middle_card"] = random_card
             cache.set(self.room_group_name, room_data)
@@ -148,10 +151,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 "middle_card": "",
             })
 
-        # Disconnect if the room is full
+        # TODO: DEBUG: Disconnect if the room is full
         room_data = cache.get(self.room_group_name)
         if len(room_data["players"]) > 2:
-            await self.disconnect(1000)
+            await self.disconnect()
             return
 
     async def disconnect(self, close_code):
@@ -168,42 +171,60 @@ class MatchConsumer(AsyncWebsocketConsumer):
         # Get username and send cards
         if message_type == "username":
             self.username = message_value
-
-            # Update player info in cache
-            room_data = cache.get(self.room_group_name)
-            if (len(room_data["players"]) < 2):
-                room_data["players"][self.username] = {
-                    "wins": 0,
-                    "current_card": "",
-                    "ready": False
-                }
-                cache.set(self.room_group_name, room_data)
-            else:
-
-                # Send full room message
-                await self.send(text_data=json.dumps({
-                    "type": "error",
-                    "value": "The room is full"
-                }))
-
-                await self.disconnect(1000)
-                return
             
-            # Send usernames to both players
-            usernames = list(room_data["players"].keys())
-            if len(usernames) == 2:
-                await self.channel_layer.group_send(
-                    self.room_group_name, {
-                        "type": "send.usernames",
-                        "value": usernames
+            # Skip if user already exists
+            room_data = cache.get(self.room_group_name)
+            if self.username not in room_data["players"]:
+                if len(room_data["players"]) < 2:
+                            
+                    # Update player info in cache
+                    room_data = cache.get(self.room_group_name)
+                    room_data["players"][self.username] = {
+                        "wins": 0,
+                        "current_card": "",
+                        "ready": False,
+                        "cards": []
                     }
-                )
+                    
+                    cache.set(self.room_group_name, room_data)
+                    
+                    # Send middle card
+                    await self.__create_middle_card__()
+                    
+                else:
 
-            await self.__send_round_new_cards__()
-            await self.__start_round__()
+                    # TODO: DEBUG: Disconnect if the room is full
+                    # Send full room message
+                    await self.send(text_data=json.dumps({
+                        "type": "error",
+                        "value": "La sala está llena"
+                    }))
+
+                    await self.disconnect(1000)
+                    return
             
             print(room_data)
 
+            # Send random cards to user
+            await self.__send_round_new_cards__()
+            
+            # Send current middle card
+            await self.channel_layer.group_send(
+                self.room_group_name, {
+                    "type": "send.middile_card",
+                    "value": room_data["middle_card"]
+                }
+            )
+            
+            # Send usernames
+            usernames = list(room_data["players"].keys())
+            await self.channel_layer.group_send(
+                self.room_group_name, {
+                    "type": "send_usernames",
+                    "value": usernames
+                }
+            )
+            
         if message_type == "use card":
             # Update player info in cache
             room_data = cache.get(self.room_group_name)
@@ -276,7 +297,15 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         return
                 
                 # start new round
-                await self.__start_round__()
+                await self.__create_middle_card__()
+                
+                # Send current middle card
+                await self.channel_layer.group_send(
+                    self.room_group_name, {
+                        "type": "send.middile_card",
+                        "value": room_data["middle_card"]
+                    }
+                )
                 
         if message_type == "more cards":
                         
