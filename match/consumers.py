@@ -169,7 +169,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 "middle_card": "",
             })
 
-        # TODO: DEBUG: Disconnect if the room is full
+        # Disconnect if the room is full
         room_data = cache.get(self.room_group_name)
         if len(room_data["players"]) > 2:
             await self.disconnect()
@@ -211,8 +211,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
                 else:
 
-                    # TODO: DEBUG: Disconnect if the room is full
-                    # Send full room message
+                    # Disconnect if the room is full
                     await self.send(text_data=json.dumps({
                         "type": "error",
                         "value": "La sala está llena"
@@ -241,6 +240,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
             room_data = cache.get(self.room_group_name)
             middle_card = room_data["middle_card"]
             room_data["players"][self.username]["current_card"] = message_value
+            room_data["players"][self.username]["cards"].remove(message_value)
             cache.set(self.room_group_name, room_data)
 
             # Check if both players have used a card
