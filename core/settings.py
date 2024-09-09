@@ -8,13 +8,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Read env variables
 load_dotenv()
 MAX_POINTS = int(os.getenv("MAX_POINTS"))
+REDIS_HOST = os.getenv("REDIS_HOST")
 
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-v8c+a*s9$9myks(-3l%=v*sf+!d^$l-ktqq7^$7oauk#a+a4=1'
+SECRET_KEY = os.getenv("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -124,7 +125,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [("127.0.0.1", 6379)],
+            "hosts": [(REDIS_HOST, 6379)],
         },
     },
 }
