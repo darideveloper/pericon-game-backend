@@ -188,9 +188,21 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
                 await self.disconnect(1000)
                 return
+            
+            # Send usernames to both players
+            usernames = list(room_data["players"].keys())
+            if len(usernames) == 2:
+                await self.channel_layer.group_send(
+                    self.room_group_name, {
+                        "type": "send.usernames",
+                        "value": usernames
+                    }
+                )
 
             await self.__send_round_new_cards__()
             await self.__start_round__()
+            
+            print(room_data)
 
         if message_type == "use card":
             # Update player info in cache
@@ -321,4 +333,13 @@ class MatchConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "game winner",
             "value": winner
+        }))
+        
+    async def send_usernames(self, event):
+        usernames = event["value"]
+
+        # Send usernames to WebSocket
+        await self.send(text_data=json.dumps({
+            "type": "usernames",
+            "value": usernames
         }))
