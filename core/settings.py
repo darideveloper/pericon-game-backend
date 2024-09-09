@@ -9,6 +9,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 load_dotenv()
 MAX_POINTS = int(os.getenv("MAX_POINTS"))
 REDIS_HOST = os.getenv("REDIS_HOST")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
 
 
 # Quick-start development settings - unsuitable for production
@@ -125,7 +126,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(REDIS_HOST, 6379)],
+            "hosts": [(f"redis://:{REDIS_PASSWORD}@{REDIS_HOST}:6379/0")],
         },
     },
 }
