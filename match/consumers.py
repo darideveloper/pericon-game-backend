@@ -15,6 +15,7 @@ class MatchMatchmakerConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         # Add user to the waiting queue
         waiting_queue.append(self.channel_name)
+        print(f"User {self.channel_name} added to the queue")
 
         # Send a message to the user that they are in the queue
         await self.accept()
