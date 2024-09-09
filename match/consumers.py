@@ -4,6 +4,7 @@ import string
 from collections import deque
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.core.cache import cache
+from django.conf import settings
 
 # A global set to track active room names
 waiting_queue = deque()
@@ -233,19 +234,33 @@ class MatchConsumer(AsyncWebsocketConsumer):
                     room_data["players"][round_winner]["wins"] += 1
                     cache.set(self.room_group_name, room_data)
                     
-                # Submit points
-                points = []
-                for player, player_data in room_data["players"].items():
-                    points.append({
-                        "player": player,
-                        "points": player_data["wins"]
-                    })
-                await self.channel_layer.group_send(
-                    self.room_group_name, {
-                        "type": "send.points",
-                        "value": points
-                    }
-                )
+                    # Submit points
+                    points = []
+                    for player, player_data in room_data["players"].items():
+                        points.append({
+                            "player": player,
+                            "points": player_data["wins"]
+                        })
+                    await self.channel_layer.group_send(
+                        self.room_group_name, {
+                            "type": "send.points",
+                            "value": points
+                        }
+                    )
+                    
+                    # Validate if any player match the max points
+                    if room_data["players"][round_winner]["wins"] >= settings.MAX_POINTS:
+                        # Send winner message
+                        await self.channel_layer.group_send(
+                            self.room_group_name, {
+                                "type": "send.game_winner",
+                                "value": round_winner
+                            }
+                        )
+                        
+                        # Disconnect players
+                        await self.disconnect(1000)
+                        return
                 
                 # start new round
                 await self.__start_round__()
@@ -296,4 +311,13 @@ class MatchConsumer(AsyncWebsocketConsumer):
         await self.send(text_data=json.dumps({
             "type": "points",
             "value": points
+        }))
+
+    async def send_game_winner(self, event):
+        winner = event["value"]
+
+        # Send winner to WebSocket
+        await self.send(text_data=json.dumps({
+            "type": "game winner",
+            "value": winner
         }))

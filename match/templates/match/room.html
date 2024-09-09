@@ -93,14 +93,14 @@
                 middleCard.innerHTML = ''
 
                 const card = data.value
-                
+
                 // render middle card as button with text
                 const cardButton = document.createElement('button')
                 cardButton.textContent = card
                 middleCard.appendChild(cardButton)
             }
 
-            
+
             // render errors
             if (data.type === 'error') {
                 alert(data.value)
@@ -158,7 +158,7 @@
                         alert('You lose this round')
                     }
                 }
-                
+
                 // count available cards
                 const myCards = document.querySelector('.my-cards').querySelectorAll('button')
                 if (myCards.length === 0) {
@@ -179,6 +179,22 @@
                     } else {
                         opponentPoints.textContent = point.points
                     }
+                })
+            }
+
+            // show winner and end game
+            if (data.type === 'game winner') {
+                const winner = data.value
+                if (winner === username) {
+                    alert('You win the game')
+                } else {
+                    alert('You lose the game')
+                }
+
+                // disable all buttons
+                const buttons = document.querySelectorAll('button')
+                buttons.forEach(button => {
+                    button.disabled = true
                 })
             }
 
