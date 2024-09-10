@@ -110,8 +110,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
         random_cards = room_data["players"][self.username]["cards"]
         if not random_cards:
 
-            # Get 3 random cards
-            random_cards = random.sample(self.cards, 3)
+            # # Get 3 random cards
+            # random_cards = random.sample(self.cards, 3)
+            # Debug: fixed cards
+            random_cards = ["1 swords", "2 swords", "3 swords"]
 
             # Save card in cache
             room_data["players"][self.username]["cards"] = random_cards
@@ -377,6 +379,9 @@ class MatchConsumer(AsyncWebsocketConsumer):
                     
                     # Reset round data
                     room_data["turn"] = 0
+                    for player in room_data["players"]:
+                        room_data["players"][player]["wins_turn"] = 0
+                        room_data["players"][player]["cards_round"] = []
                     
                     # Send points
                     points = []
@@ -392,8 +397,13 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         }
                     )
                     
-                    # Update room data and no submit turn winner
+                    # Update room data
                     cache.set(self.room_group_name, room_data)
+                    
+                    # Generate new middle card
+                    await self.__create_middle_card__()
+                    
+                    # no submit turn winner
                     return
 
                 # Submit turn winner
@@ -412,8 +422,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
             # Generate and send new cards to each player
             await self.__send_round_new_cards__()
             
-            # Create and send new middle card
-            await self.__create_middle_card__()
+            # Send new middle card
             await self.__send_middile_card__()
 
         if message_type == "middle card":
