@@ -409,8 +409,12 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
         if message_type == "more cards":
 
-            # Update user status to ready
+            # Generate and send new cards to each player
             await self.__send_round_new_cards__()
+            
+            # Create and send new middle card
+            await self.__create_middle_card__()
+            await self.__send_middile_card__()
 
         if message_type == "middle card":
 
