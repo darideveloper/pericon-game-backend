@@ -111,9 +111,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
         if not random_cards:
 
             # # Get 3 random cards
-            # random_cards = random.sample(self.cards, 3)
-            # Debug: fixed cards
-            random_cards = ["1 swords", "2 swords", "3 swords"]
+            if settings.DEBUG_CARDS:
+                random_cards = ["1 swords", "2 swords", "3 swords"]
+            else:
+                random_cards = random.sample(self.cards, 3)
 
             # Save card in cache
             room_data["players"][self.username]["cards"] = random_cards

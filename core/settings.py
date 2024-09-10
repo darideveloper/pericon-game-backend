@@ -10,6 +10,7 @@ load_dotenv()
 MAX_POINTS = int(os.getenv("MAX_POINTS"))
 REDIS_HOST = os.getenv("REDIS_HOST")
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+DEBUG_CARDS = os.getenv("DEBUG_CARDS", "False") == "True"
 
 
 # Quick-start development settings - unsuitable for production
