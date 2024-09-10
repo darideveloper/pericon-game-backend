@@ -72,13 +72,13 @@ class MatchConsumer(AsyncWebsocketConsumer):
         "cards_round": []
     }
 
-    def __get_round_winner__(self, round_cards, middle_card):
+    def __get_turn_winner__(self, turn_cards, middle_card):
         # Calculate winner
 
-        player_1_username = round_cards[0]["player"]
-        player_2_username = round_cards[1]["player"]
-        player_1_card = round_cards[0]["card"]
-        player_2_card = round_cards[1]["card"]
+        player_1_username = turn_cards[0]["player"]
+        player_2_username = turn_cards[1]["player"]
+        player_1_card = turn_cards[0]["card"]
+        player_2_card = turn_cards[1]["card"]
 
         player_1_card_num = int(player_1_card.split(" ")[0])
         player_2_card_num = int(player_2_card.split(" ")[0])
@@ -263,10 +263,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
             if cards_player_round == cards_opponent_round and cards_opponent_round > 0:
 
                 # Get cards from each player
-                round_cards = []
+                turn_cards = []
                 for player, player_data in room_data["players"].items():
                     player_card = player_data["current_card"]
-                    round_cards.append({
+                    turn_cards.append({
                         "player": player,
                         "card": player_card
                     })
@@ -274,27 +274,27 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 # Send cards to both players
                 await self.channel_layer.group_send(
                     self.room_group_name, {
-                        "type": "send.round_played_cards",
-                        "value": round_cards
+                        "type": "send.turn_played_cards",
+                        "value": turn_cards
                     }
                 )
 
-                round_winner = self.__get_round_winner__(
-                    round_cards, middle_card
+                turn_winner = self.__get_turn_winner__(
+                    turn_cards, middle_card
                 )
                 
                 # Save wins in cache
-                if round_winner != "draw":
-                    room_data["players"][round_winner]["wins"] += 1
+                if turn_winner != "draw":
+                    room_data["players"][turn_winner]["wins"] += 1
                     cache.set(self.room_group_name, room_data)
 
                     # Validate if any player match the max points
-                    if room_data["players"][round_winner]["wins"] >= settings.MAX_POINTS:
+                    if room_data["players"][turn_winner]["wins"] >= settings.MAX_POINTS:
                         # Send winner message
                         await self.channel_layer.group_send(
                             self.room_group_name, {
                                 "type": "send.game_winner",
-                                "value": round_winner
+                                "value": turn_winner
                             }
                         )
 
@@ -319,8 +319,8 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 # Submit turn winner
                 await self.channel_layer.group_send(
                     self.room_group_name, {
-                        "type": "send.round_winner",
-                        "value": round_winner
+                        "type": "send.turn_winner",
+                        "value": turn_winner
                     }
                 )
 
@@ -347,16 +347,16 @@ class MatchConsumer(AsyncWebsocketConsumer):
             "value": card
         }))
 
-    async def send_round_played_cards(self, event):
+    async def send_turn_played_cards(self, event):
         cards = event["value"]
 
         # Send cards to WebSocket
         await self.send(text_data=json.dumps({
-            "type": "round played cards",
+            "type": "turn played cards",
             "value": cards
         }))
 
-    async def send_round_winner(self, event):
+    async def send_turn_winner(self, event):
         winner = event["value"]
 
         # Send winner to WebSocket
