@@ -65,11 +65,19 @@ class MatchMatchmakerConsumer(AsyncWebsocketConsumer):
 class MatchConsumer(AsyncWebsocketConsumer):
     
     player_initial_data = {
-        "wins": 0,
+        "wins_round": 0,
+        "wins_turn": 0,
         "current_card": "",
         "ready": False,
         "cards": [],
         "cards_round": []
+    }
+    
+    game_initial_data = {
+        "players": {},
+        "middle_card": "",
+        "turn": 0,
+        "round": 0,
     }
 
     def __get_turn_winner__(self, turn_cards, middle_card):
@@ -150,6 +158,52 @@ class MatchConsumer(AsyncWebsocketConsumer):
                 "value": middle_card
             }
         )
+        
+    def __is_round_over__(self, room_data: dict) -> tuple[bool, str]:
+        """ Check if the round is over
+        
+        Args:
+            room_data (dict): Room data
+            
+        Returns:
+            tuple[bool, str]: (round_over, round_winner)
+        """
+        
+        round_winner = "draw"
+        
+        # Validate if the round is over
+        if room_data["turn"] == 3:
+            
+            # Update round number
+            room_data["round"] += 1
+
+            # found round winner
+            for player, player_data in room_data["players"].items():
+                if player_data["wins_turn"] >= 2:
+                    round_winner = player
+                    break
+            
+            return True, round_winner
+        
+        return False, round_winner
+
+    def __is_game_over__(self, room_data: dict) -> tuple[bool, str]:
+        """ Check if the round is over
+        
+        Args:
+            room_data (dict): Room data
+            turn_winner (str): Last rurn winner
+            
+        Returns:
+            tuple[bool, str]: (game_over, game_winner)
+        """
+        
+        # Round rounds winner
+        for player, player_data in room_data["players"].items():
+            if player_data["wins_round"] >= settings.MAX_POINTS:
+                return True, player
+        
+        return False, ""
 
     async def connect(self):
         self.room_name = self.scope["url_route"]["kwargs"]["room_name"]
@@ -173,8 +227,7 @@ class MatchConsumer(AsyncWebsocketConsumer):
         # Initialize room data
         if not cache.get(self.room_group_name):
             cache.set(self.room_group_name, {
-                "players": {},
-                "middle_card": "",
+                **MatchConsumer.game_initial_data
             })
 
         # Disconnect if the room is full
@@ -261,8 +314,11 @@ class MatchConsumer(AsyncWebsocketConsumer):
 
             # calculate winner after both players have played the turn card card
             if cards_player_round == cards_opponent_round and cards_opponent_round > 0:
+                
+                # Update turn number
+                room_data["turn"] += 1
 
-                # Get cards from each player
+                # Send used cards to both players
                 turn_cards = []
                 for player, player_data in room_data["players"].items():
                     player_card = player_data["current_card"]
@@ -271,7 +327,6 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         "card": player_card
                     })
 
-                # Send cards to both players
                 await self.channel_layer.group_send(
                     self.room_group_name, {
                         "type": "send.turn_played_cards",
@@ -279,35 +334,56 @@ class MatchConsumer(AsyncWebsocketConsumer):
                     }
                 )
 
+                # Get winner
                 turn_winner = self.__get_turn_winner__(
                     turn_cards, middle_card
                 )
                 
-                # Save wins in cache
+                # Update turn wins
                 if turn_winner != "draw":
-                    room_data["players"][turn_winner]["wins"] += 1
-                    cache.set(self.room_group_name, room_data)
-
-                    # Validate if any player match the max points
-                    if room_data["players"][turn_winner]["wins"] >= settings.MAX_POINTS:
-                        # Send winner message
+                    room_data["players"][turn_winner]["wins_turn"] += 1
+                
+                round_over, round_winner = self.__is_round_over__(room_data)
+                if round_over:
+                    
+                    # Add points to winner
+                    if round_winner != "draw":
+                        room_data["players"][round_winner]["wins_round"] += 1
+                    
+                    # Validate if is game over
+                    game_over, game_winner = self.__is_game_over__(room_data)
+                    if game_over:
+                        # Send game winner to players
                         await self.channel_layer.group_send(
                             self.room_group_name, {
                                 "type": "send.game_winner",
-                                "value": turn_winner
+                                "value": game_winner
                             }
                         )
-
+                        
                         # Disconnect players
                         await self.disconnect(1000)
+                        
+                        # No submit turn nor round winner
                         return
-
-                    # Submit points
+                    
+                    # Send round winner to players
+                    await self.channel_layer.group_send(
+                        self.room_group_name, {
+                            "type": "send.round_winner",
+                            "value": round_winner
+                        }
+                    )
+                    
+                    # Reset round data
+                    room_data["turn"] = 0
+                    
+                    # Send points
                     points = []
                     for player, player_data in room_data["players"].items():
                         points.append({
                             "player": player,
-                            "points": player_data["wins"]
+                            "points": player_data["wins_round"]
                         })
                     await self.channel_layer.group_send(
                         self.room_group_name, {
@@ -315,6 +391,10 @@ class MatchConsumer(AsyncWebsocketConsumer):
                             "value": points
                         }
                     )
+                    
+                    # Update room data and no submit turn winner
+                    cache.set(self.room_group_name, room_data)
+                    return
 
                 # Submit turn winner
                 await self.channel_layer.group_send(
@@ -323,6 +403,9 @@ class MatchConsumer(AsyncWebsocketConsumer):
                         "value": turn_winner
                     }
                 )
+                
+                # update room data
+                cache.set(self.room_group_name, room_data)
 
         if message_type == "more cards":
 
@@ -356,15 +439,6 @@ class MatchConsumer(AsyncWebsocketConsumer):
             "value": cards
         }))
 
-    async def send_turn_winner(self, event):
-        winner = event["value"]
-
-        # Send winner to WebSocket
-        await self.send(text_data=json.dumps({
-            "type": "turn winner",
-            "value": winner
-        }))
-
     async def send_points(self, event):
         points = event["value"]
 
@@ -380,6 +454,24 @@ class MatchConsumer(AsyncWebsocketConsumer):
         # Send winner to WebSocket
         await self.send(text_data=json.dumps({
             "type": "game winner",
+            "value": winner
+        }))
+        
+    async def send_round_winner(self, event):
+        winner = event["value"]
+
+        # Send winner to WebSocket
+        await self.send(text_data=json.dumps({
+            "type": "round winner",
+            "value": winner
+        }))
+        
+    async def send_turn_winner(self, event):
+        winner = event["value"]
+
+        # Send winner to WebSocket
+        await self.send(text_data=json.dumps({
+            "type": "turn winner",
             "value": winner
         }))
 
